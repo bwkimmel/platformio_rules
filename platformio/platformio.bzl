@@ -49,12 +49,12 @@ _UNZIP_COMMAND="unzip -qq -o -d {project_dir} {zip_filename}"
 
 # Command that executes the PlatformIO build system and builds the project in
 # the specified directory.
-_BUILD_COMMAND="platformio run -s -d {project_dir}"
+_BUILD_COMMAND="{platformio} run -s -d {project_dir}"
 
 
 # Command that executes the PlatformIO build system and uploads the compiled
 # firmware to the device.
-_UPLOAD_COMMAND="platformio run -s -d {project_dir} -t upload"
+_UPLOAD_COMMAND="{platformio} run -s -d {project_dir} -t upload"
 
 
 # Header used in the shell script that makes platformio_project executable.
@@ -196,7 +196,9 @@ def _emit_build_action(ctx, project_dir):
   for zip_file in transitive_zip_files.to_list():
     commands.append(_UNZIP_COMMAND.format(
         project_dir=project_dir, zip_filename=zip_file.path))
-  commands.append(_BUILD_COMMAND.format(project_dir=project_dir))
+  commands.append(_BUILD_COMMAND.format(
+      platformio=ctx.executable.platformio_tool.path,
+      project_dir=project_dir))
 
   # The PlatformIO build system needs the project configuration file, the main
   # file and all the transitive dependancies.
@@ -206,6 +208,7 @@ def _emit_build_action(ctx, project_dir):
   ctx.actions.run_shell(
       inputs=inputs,
       outputs=[ctx.outputs.firmware_elf],
+      tools=depset([ctx.executable.platformio_tool]),
       command="\n".join(commands),
       env={
         # The PlatformIO binary assumes that the build tools are in the path.
@@ -235,7 +238,17 @@ def _emit_executable_action(ctx):
   # TODO(mum4k): Make this script smarter, when executed via Bazel, the current
   # directory is project_name.runfiles/__main__ so we need to go two dirs up.
   # This however won't work when executed directly.
-  content=[_SHELL_HEADER, _UPLOAD_COMMAND.format(project_dir="../..")]
+  platformio_path = '/'.join([
+      ctx.attr.platformio_tool.label.workspace_root,
+      ctx.attr.platformio_tool.label.package,
+      ctx.attr.platformio_tool.label.name,
+  ])
+  content=[
+      _SHELL_HEADER,
+      _UPLOAD_COMMAND.format(
+          platformio=platformio_path,
+          project_dir="../.."),
+  ]
   ctx.actions.write(
       output=ctx.outputs.executable,
       content="\n".join(content),
@@ -262,6 +275,10 @@ def _platformio_project_impl(ctx):
   project_dir = ctx.outputs.platformio_ini.dirname
   _emit_build_action(ctx, project_dir)
   _emit_executable_action(ctx)
+
+  runfiles = ctx.runfiles(files = [ctx.executable.platformio_tool])
+  runfiles = runfiles.merge(ctx.attr.platformio_tool[DefaultInfo].data_runfiles)
+  return [DefaultInfo(runfiles=runfiles)]
 
 
 platformio_library = rule(
@@ -298,6 +315,13 @@ A list of labels, additional source files to include in the resulting zip file.
         doc = """
 A list of Bazel targets, other platformio_library targets that this one depends on.
 """,
+    ),
+    "platformio_tool": attr.label(
+        executable = True,
+        cfg = "host",
+        allow_files = True,
+        default = Label("//platformio:pio"),
+        doc = "The platformio-core CLI tool.",
     ),
   },
   doc = """
@@ -419,6 +443,13 @@ options.
 A list of Bazel targets, the platformio_library targets that this one
 depends on.
 """,
+      ),
+      "platformio_tool": attr.label(
+        executable = True,
+        cfg = "host",
+        allow_files = True,
+        default = Label("//platformio:pio"),
+        doc = "The platformio-core CLI tool.",
       ),
     },
     doc = """

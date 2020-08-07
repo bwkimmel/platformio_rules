@@ -8,3 +8,13 @@ filegroup(
 )
 
 exports_files(["platformio.bzl"])
+
+load("@platformio_python_deps//:requirements.bzl", "requirement")
+
+py_binary(
+    name = "pio",
+    srcs = ["pio.py"],
+    deps = [
+        requirement("platformio"),
+    ],
+)
