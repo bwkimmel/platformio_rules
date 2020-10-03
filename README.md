@@ -42,7 +42,7 @@ See [Releases](https://github.com/mum4k/platformio_rules/releases) for the most 
 git_repository(
     name = "platformio_rules",
     remote = "http://github.com/bwkimmel/platformio_rules.git",
-    tag = "v0.0.11",
+    tag = "v0.0.12",
 )
 
 http_archive(
